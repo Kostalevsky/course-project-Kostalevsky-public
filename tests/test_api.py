@@ -1,28 +1,26 @@
-import pytest
-from fastapi.testclient import TestClient
+# Больше не импортируем _CARDS, _DECKS
+# from app.main import _CARDS, _DECKS, app
 
-from app.main import _CARDS, _DECKS, app
+# Удалите эту фикстуру - она теперь в conftest.py
+# @pytest.fixture(autouse=True)
+# def reset_storage():
+#     _DECKS.clear()
+#     _CARDS.clear()
+#     yield
+#     _DECKS.clear()
+#     _CARDS.clear()
 
-
-@pytest.fixture(autouse=True)
-def reset_storage():
-    _DECKS.clear()
-    _CARDS.clear()
-    yield
-    _DECKS.clear()
-    _CARDS.clear()
-
-
-client = TestClient(app)
+# Удалите эту строку - client теперь фикстура из conftest.py
+# client = TestClient(app)
 
 
-def test_health():
+def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
 
 
-def test_decks_flow_create_and_get():
+def test_decks_flow_create_and_get(client):
     # изначально пусто
     r = client.get("/decks")
     assert r.status_code == 200
@@ -47,7 +45,7 @@ def test_decks_flow_create_and_get():
     assert "correlation_id" in body
 
 
-def test_cards_and_random_and_review():
+def test_cards_and_random_and_review(client):
     deck = client.post("/decks", json={"name": "IT-terms", "description": None}).json()
     did = deck["id"]
 
@@ -81,7 +79,7 @@ def test_cards_and_random_and_review():
     assert 1.3 <= after["ease"] <= 3.0
 
 
-def test_validation_errors():
+def test_validation_errors(client):
     r = client.post("/decks", json={"name": "", "description": "x"})
     assert r.status_code == 422
 
@@ -98,7 +96,7 @@ def test_validation_errors():
     assert r.status_code == 422
 
 
-def test_review_unknown_card_gives_404_envelope():
+def test_review_unknown_card_gives_404_envelope(client):
     import uuid
 
     unknown = str(uuid.uuid4())  # Valid UUID v4 format

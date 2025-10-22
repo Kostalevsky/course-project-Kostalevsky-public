@@ -1,106 +1,105 @@
 import os
+import random
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.orm import Session
 
+from .database import get_db, init_db
 from .errors import not_found_error, problem, validation_error
 from .middleware import rate_limit_middleware
+from .models import Card, Deck
 from .schemas import CardCreate, CardOut, DeckCreate, DeckOut, ReviewIn
 from .security import secure_save, validate_file_upload
 
 app = FastAPI(title="SecDev Course App", version="0.1.0")
 
-# Отключаем rate limiting для тестов
+
+@app.on_event("startup")
+def on_startup():
+    # В тестах не создаём таблицы автоматически
+    if not os.getenv("TESTING"):
+        init_db()
+
 
 if not os.getenv("DISABLE_RATE_LIMITING"):
     app.middleware("http")(rate_limit_middleware)
 
-_DECKS: dict[str, dict] = {}
-_CARDS: dict[str, dict] = {}
+
+def list_decks(db: Session):
+    decks = db.query(Deck).all()
+    return [deck.to_dict() for deck in decks]
 
 
-def _uid() -> str:
-    return str(uuid.uuid4())
+def create_deck(db: Session, name: str, description: str | None):
+    deck = Deck(name=name, description=description)
+    db.add(deck)
+    db.commit()
+    db.refresh(deck)
+    return deck.to_dict()
 
 
-def list_decks():
-    return [
-        {
-            "id": d["id"],
-            "name": d["name"],
-            "description": d.get("description"),
-            "cards": sum(1 for c in _CARDS.values() if c["deck_id"] == d["id"]),
-        }
-        for d in _DECKS.values()
-    ]
-
-
-def create_deck(name: str, description: str | None):
-    did = _uid()
-    deck = {"id": did, "name": name, "description": description}
-    _DECKS[did] = deck
-    return {**deck, "cards": 0}
-
-
-def get_deck(deck_id: str):
-    d = _DECKS.get(deck_id)
-    if not d:
+def get_deck(db: Session, deck_id: str):
+    deck = db.query(Deck).filter(Deck.id == deck_id).first()
+    if not deck:
         return None
-    return {**d, "cards": sum(1 for c in _CARDS.values() if c["deck_id"] == deck_id)}
+    return deck.to_dict()
 
 
-def create_card(deck_id: str, front: str, back: str, hint: str | None):
-    if deck_id not in _DECKS:
+def create_card(db: Session, deck_id: str, front: str, back: str, hint: str | None):
+    deck = db.query(Deck).filter(Deck.id == deck_id).first()
+    if not deck:
         return None
-    cid = _uid()
-    card = {
-        "id": cid,
-        "deck_id": deck_id,
-        "front": front,
-        "back": back,
-        "hint": hint,
-        "due_at": datetime.now(UTC),
-        "interval_days": 0,
-        "ease": 2.5,
-    }
-    _CARDS[cid] = card
-    return card
+
+    card = Card(
+        deck_id=deck_id,
+        front=front,
+        back=back,
+        hint=hint,
+        due_at=datetime.now(UTC),
+        interval_days=0,
+        ease=2.5,
+    )
+    db.add(card)
+    db.commit()
+    db.refresh(card)
+    return card.to_dict()
 
 
-def random_card(deck_id: str):
-    cards = [c for c in _CARDS.values() if c["deck_id"] == deck_id]
+def random_card(db: Session, deck_id: str):
+    cards = db.query(Card).filter(Card.deck_id == deck_id).all()
     if not cards:
         return None
-    return cards[0]
+    return random.choice(cards).to_dict()
 
 
-def review(card_id: str, grade: str):
-    c = _CARDS.get(card_id)
-    if not c:
+def review(db: Session, card_id: str, grade: str):
+    card = db.query(Card).filter(Card.id == card_id).first()
+    if not card:
         return None
+
     if grade == "again":
-        ease = max(1.3, c["ease"] - 0.2)
+        ease = max(1.3, card.ease - 0.2)
         interval = 1
     elif grade == "hard":
-        ease = max(1.3, c["ease"] - 0.05)
-        interval = max(1, int(max(1, c["interval_days"]) * 1.2))
+        ease = max(1.3, card.ease - 0.05)
+        interval = max(1, int(max(1, card.interval_days) * 1.2))
     else:
-        ease = min(3.0, c["ease"] + 0.05)
-        interval = max(1, int(max(1, c["interval_days"]) * ease))
-    c.update(
-        {
-            "ease": ease,
-            "interval_days": interval,
-            "due_at": datetime.now(UTC) + timedelta(days=interval),
-        }
-    )
-    return c
+        ease = min(3.0, card.ease + 0.05)
+        interval = max(1, int(max(1, card.interval_days) * ease))
+
+    card.ease = ease
+    card.interval_days = interval
+    card.due_at = datetime.now(UTC) + timedelta(days=interval)
+
+    db.commit()
+    db.refresh(card)
+    return card.to_dict()
 
 
 def validate_uuid(value: str, field_name: str = "id") -> bool:
-    """Проверяет, является ли строка валидным UUID."""
     try:
         uuid.UUID(value)
         return True
@@ -117,10 +116,8 @@ class ApiError(Exception):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handler для ошибок валидации FastAPI/Pydantic в формате RFC 7807."""
     errors = exc.errors()
 
-    # Формируем понятное описание ошибки
     if errors:
         first_error = errors[0]
         field_path = " -> ".join(str(loc) for loc in first_error["loc"])
@@ -167,38 +164,18 @@ def health():
     return {"status": "ok"}
 
 
-_DB = {"items": []}
-
-
-@app.post("/items")
-def create_item(name: str):
-    if not name or len(name) > 100:
-        raise ApiError(code="validation_error", message="name must be 1..100 chars", status=422)
-    item = {"id": len(_DB["items"]) + 1, "name": name}
-    _DB["items"].append(item)
-    return item
-
-
-@app.get("/items/{item_id}")
-def get_item(item_id: int):
-    for it in _DB["items"]:
-        if it["id"] == item_id:
-            return it
-    raise ApiError(code="not_found", message="item not found", status=404)
-
-
 @app.get("/decks", response_model=list[DeckOut])
-def get_decks():
-    return list_decks()
+def get_decks(db: Session = Depends(get_db)):
+    return list_decks(db)
 
 
 @app.post("/decks", response_model=DeckOut, status_code=status.HTTP_201_CREATED)
-def create_deck_endpoint(payload: DeckCreate):
-    return create_deck(payload.name, payload.description)
+def create_deck_endpoint(payload: DeckCreate, db: Session = Depends(get_db)):
+    return create_deck(db, payload.name, payload.description)
 
 
 @app.get("/decks/{deck_id}", response_model=DeckOut)
-def get_deck_endpoint(deck_id: str):
+def get_deck_endpoint(deck_id: str, db: Session = Depends(get_db)):
     if not validate_uuid(deck_id):
         return validation_error(
             detail="Invalid deck ID format",
@@ -206,7 +183,7 @@ def get_deck_endpoint(deck_id: str):
             instance=f"/decks/{deck_id}",
         )
 
-    deck = get_deck(deck_id)
+    deck = get_deck(db, deck_id)
     if not deck:
         return not_found_error("deck", deck_id, f"/decks/{deck_id}")
     return deck
@@ -217,7 +194,7 @@ def get_deck_endpoint(deck_id: str):
     response_model=CardOut,
     status_code=status.HTTP_201_CREATED,
 )
-def create_card_endpoint(deck_id: str, payload: CardCreate):
+def create_card_endpoint(deck_id: str, payload: CardCreate, db: Session = Depends(get_db)):
     if not validate_uuid(deck_id):
         return validation_error(
             detail="Invalid deck ID format",
@@ -225,14 +202,14 @@ def create_card_endpoint(deck_id: str, payload: CardCreate):
             instance=f"/decks/{deck_id}/cards",
         )
 
-    card = create_card(deck_id, payload.front, payload.back, payload.hint)
+    card = create_card(db, deck_id, payload.front, payload.back, payload.hint)
     if not card:
         return not_found_error("deck", deck_id, f"/decks/{deck_id}/cards")
     return card
 
 
 @app.get("/decks/{deck_id}/cards/random", response_model=CardOut)
-def get_random_card_endpoint(deck_id: str):
+def get_random_card_endpoint(deck_id: str, db: Session = Depends(get_db)):
     if not validate_uuid(deck_id):
         return validation_error(
             detail="Invalid deck ID format",
@@ -240,7 +217,7 @@ def get_random_card_endpoint(deck_id: str):
             instance=f"/decks/{deck_id}/cards/random",
         )
 
-    card = random_card(deck_id)
+    card = random_card(db, deck_id)
     if not card:
         return problem(
             status=404,
@@ -253,20 +230,22 @@ def get_random_card_endpoint(deck_id: str):
 
 
 @app.post("/reviews", response_model=CardOut)
-def post_review(payload: ReviewIn):
+def post_review(payload: ReviewIn, db: Session = Depends(get_db)):
     if not validate_uuid(payload.card_id):
         return validation_error(
             detail="Invalid card ID format", field="card_id", instance="/reviews"
         )
 
-    card = review(payload.card_id, payload.grade)
+    card = review(db, payload.card_id, payload.grade)
     if not card:
         return not_found_error("card", payload.card_id, "/reviews")
     return card
 
 
 @app.post("/decks/{deck_id}/cards/{card_id}/image")
-def upload_card_image(deck_id: str, card_id: str, file: UploadFile = File(...)):
+def upload_card_image(
+    deck_id: str, card_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)
+):
     if not validate_uuid(deck_id):
         return validation_error(
             detail="Invalid deck ID format",
@@ -281,10 +260,12 @@ def upload_card_image(deck_id: str, card_id: str, file: UploadFile = File(...)):
             instance=f"/decks/{deck_id}/cards/{card_id}/image",
         )
 
-    if deck_id not in _DECKS:
+    deck = db.query(Deck).filter(Deck.id == deck_id).first()
+    if not deck:
         return not_found_error("deck", deck_id, f"/decks/{deck_id}/cards/{card_id}/image")
 
-    if card_id not in _CARDS or _CARDS[card_id]["deck_id"] != deck_id:
+    card = db.query(Card).filter(Card.id == card_id, Card.deck_id == deck_id).first()
+    if not card:
         return not_found_error("card", card_id, f"/decks/{deck_id}/cards/{card_id}/image")
 
     try:
@@ -319,7 +300,8 @@ def upload_card_image(deck_id: str, card_id: str, file: UploadFile = File(...)):
             instance=f"/decks/{deck_id}/cards/{card_id}/image",
         )
 
-    _CARDS[card_id]["image_path"] = result
+    card.image_path = result
+    db.commit()
 
     return {
         "message": "Image uploaded successfully",

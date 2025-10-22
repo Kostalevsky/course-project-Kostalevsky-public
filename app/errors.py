@@ -6,9 +6,6 @@ from fastapi.responses import JSONResponse
 
 
 def mask_error_details(message: str) -> str:
-    """
-    Маскирует чувствительную информацию в сообщениях об ошибках.
-    """
     patterns = [
         (r"password[:\s]+\S+", "password: [REDACTED]"),
         (r"token[:\s]+\S+", "token: [REDACTED]"),
@@ -101,7 +98,6 @@ def rate_limit_error(limit: int, window: str, instance: Optional[str] = None) ->
 def internal_error(
     detail: str = "An internal server error occurred", instance: Optional[str] = None
 ) -> JSONResponse:
-    # Маскируем чувствительную информацию
     masked_detail = detail
     if "password" in detail.lower():
         masked_detail = "An internal server error occurred"
