@@ -19,7 +19,9 @@ app = FastAPI(title="SecDev Course App", version="0.1.0")
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
+    # В тестах не создаём таблицы автоматически
+    if not os.getenv("TESTING"):
+        init_db()
 
 
 if not os.getenv("DISABLE_RATE_LIMITING"):

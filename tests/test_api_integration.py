@@ -9,17 +9,11 @@
 
 import uuid
 
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-client = TestClient(app)
-
 
 class TestValidationIntegration:
     """Тесты валидации в интеграции с API."""
 
-    def test_valid_deck_creation(self):
+    def test_valid_deck_creation(self, client):
         """Тест создания валидной колоды."""
         response = client.post("/decks", json={"name": "Test Deck", "description": "A test deck"})
 
@@ -32,7 +26,7 @@ class TestValidationIntegration:
         deck_id = data["id"]
         uuid.UUID(deck_id)  # Не должно вызывать исключение
 
-    def test_invalid_deck_id_format(self):
+    def test_invalid_deck_id_format(self, client):
         """Тест невалидного формата ID колоды."""
         invalid_id = "not-a-uuid"
 
@@ -50,7 +44,7 @@ class TestValidationIntegration:
         assert data["status"] == 422
         assert "Invalid deck ID format" in data["detail"]
 
-    def test_invalid_card_id_format(self):
+    def test_invalid_card_id_format(self, client):
         """Тест невалидного формата ID карточки."""
         # Сначала создаем колоду
         # deck_response = client.post(
@@ -86,7 +80,7 @@ class TestValidationIntegration:
 class TestRFC7807Integration:
     """Тесты RFC 7807 в интеграции с API."""
 
-    def test_validation_error_format(self):
+    def test_validation_error_format(self, client):
         """Тест формата ошибки валидации."""
         response = client.post(
             "/decks",
@@ -126,7 +120,7 @@ class TestRFC7807Integration:
     #     assert "not found" in data["detail"]
     #     assert "correlation_id" in data
 
-    def test_correlation_id_consistency(self):
+    def test_correlation_id_consistency(self, client):
         """Тест консистентности correlation ID."""
         non_existent_id = str(uuid.uuid4())
         response = client.get(f"/decks/{non_existent_id}")
@@ -146,7 +140,7 @@ class TestRFC7807Integration:
 class TestRateLimitingIntegration:
     """Тесты rate limiting в интеграции с API."""
 
-    def test_normal_request_allowed(self):
+    def test_normal_request_allowed(self, client):
         """Тест что обычные запросы разрешены."""
         response = client.get("/health")
 
@@ -154,14 +148,14 @@ class TestRateLimitingIntegration:
         data = response.json()
         assert data["status"] == "ok"
 
-    def test_multiple_requests(self):
+    def test_multiple_requests(self, client):
         """Тест множественных запросов."""
         # Делаем несколько запросов подряд
         for i in range(10):
             response = client.get("/health")
             assert response.status_code == 200
 
-    def test_deck_creation_validation(self):
+    def test_deck_creation_validation(self, client):
         """Тест валидации при создании колоды."""
         # Валидная колода
         response = client.post("/decks", json={"name": "Valid Deck", "description": "A valid deck"})
@@ -219,7 +213,7 @@ class TestCardOperations:
     #     data = response.json()
     #     assert "deck not found" in data["detail"]
 
-    def test_get_random_card_from_empty_deck(self):
+    def test_get_random_card_from_empty_deck(self, client):
         """Тест получения случайной карточки из пустой колоды."""
         # Создаем колоду
         deck_response = client.post(
@@ -238,7 +232,7 @@ class TestCardOperations:
 class TestReviewOperations:
     """Тесты операций с повторениями."""
 
-    def test_review_valid_card(self):
+    def test_review_valid_card(self, client):
         """Тест повторения валидной карточки."""
         # Создаем колоду и карточку
         deck_response = client.post(
@@ -275,7 +269,7 @@ class TestReviewOperations:
     #     data = response.json()
     #     assert "card not found" in data["detail"]
 
-    def test_review_invalid_grade(self):
+    def test_review_invalid_grade(self, client):
         """Тест повторения с невалидной оценкой."""
         # Создаем колоду и карточку
         deck_response = client.post(
@@ -301,7 +295,7 @@ class TestReviewOperations:
 class TestEdgeCases:
     """Тесты граничных случаев."""
 
-    def test_very_long_deck_name(self):
+    def test_very_long_deck_name(self, client):
         """Тест очень длинного имени колоды."""
         long_name = "x" * 101  # Превышает лимит в 100 символов
 
@@ -312,7 +306,7 @@ class TestEdgeCases:
         assert "status" in data
         assert "detail" in data
 
-    def test_very_long_card_content(self):
+    def test_very_long_card_content(self, client):
         """Тест очень длинного содержимого карточки."""
         # Создаем колоду
         deck_response = client.post(
@@ -332,7 +326,7 @@ class TestEdgeCases:
         assert "status" in data
         assert "detail" in data
 
-    def test_unicode_content(self):
+    def test_unicode_content(self, client):
         """Тест Unicode содержимого."""
         # Создаем колоду
         deck_response = client.post(
