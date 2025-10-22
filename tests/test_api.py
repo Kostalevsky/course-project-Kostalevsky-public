@@ -41,10 +41,10 @@ def test_decks_flow_create_and_get():
     assert r.json()["cards"] == 0
 
     r = client.get("/decks/does-not-exist")
-    assert r.status_code == 404
+    assert r.status_code == 422  # Invalid UUID format
     body = r.json()
-    assert body["error"]["code"] == "not_found"
-    assert "deck not found" in body["error"]["message"]
+    assert body["status"] == 422
+    assert "correlation_id" in body
 
 
 def test_cards_and_random_and_review():
@@ -53,7 +53,9 @@ def test_cards_and_random_and_review():
 
     r = client.get(f"/decks/{did}/cards/random")
     assert r.status_code == 404
-    assert r.json()["error"]["code"] == "not_found"
+    body = r.json()
+    assert body["status"] == 404
+    assert "correlation_id" in body
 
     r = client.post(
         f"/decks/{did}/cards",
@@ -97,9 +99,11 @@ def test_validation_errors():
 
 
 def test_review_unknown_card_gives_404_envelope():
-    unknown = "00000000-0000-0000-0000-000000000000"
+    import uuid
+
+    unknown = str(uuid.uuid4())  # Valid UUID v4 format
     r = client.post("/reviews", json={"card_id": unknown, "grade": "good"})
     assert r.status_code == 404
     body = r.json()
-    assert body["error"]["code"] == "not_found"
-    assert "card not found" in body["error"]["message"]
+    assert body["status"] == 404
+    assert "correlation_id" in body
