@@ -36,3 +36,58 @@ jobs:
 
       - name: Pre-commit (all files)
         run: pre-commit run --all-files
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: hadolint.yml
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: course-app:ci
+          load: true
+
+      - name: Trivy scan (image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: course-app:ci
+          format: sarif
+          output: trivy-image.sarif
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM,LOW"
+
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-image.sarif
+
+      - name: Run container
+        run: |
+          docker run -d --name app -p 8000:8000 --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
+            --security-opt no-new-privileges:true \
+            --cap-drop ALL \
+            -e DATABASE_URL=sqlite:////data/flashcards.db \
+            -v app_data:/data \
+            course-app:ci
+          # ждём health
+          timeout 60 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} app 2>/dev/null || true)" = "healthy" ]; do sleep 2; done'
+          # uid
+          UID_IN=$(docker exec app id -u)
+          if [ "$UID_IN" = "0" ]; then
+            echo "Process is root — fail"; exit 1; fi
+
+      - name: Stop container
+        if: always()
+        run: |
+          docker rm -f app || true
+          docker volume rm app_data || true
