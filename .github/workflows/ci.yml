@@ -72,19 +72,40 @@ jobs:
 
       - name: Run container
         run: |
-          docker run -d --name app -p 8000:8000 --read-only \
-            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-            --security-opt no-new-privileges:true \
-            --cap-drop ALL \
-            -e DATABASE_URL=sqlite:////data/flashcards.db \
-            -v app_data:/data \
-            course-app:ci
-          # ждём health
-          timeout 60 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} app 2>/dev/null || true)" = "healthy" ]; do sleep 2; done'
-          # uid
-          UID_IN=$(docker exec app id -u)
-          if [ "$UID_IN" = "0" ]; then
-            echo "Process is root — fail"; exit 1; fi
+            set -euo pipefail
+
+            docker run -d --name app -p 8000:8000 --read-only \
+              --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
+              --security-opt no-new-privileges:true \
+              --cap-drop ALL \
+              -e DATABASE_URL=sqlite:////data/flashcards.db \
+              -v app_data:/data \
+              course-app:ci
+
+            echo "→ Ждём, пока приложение поднимется (до ~60 секунд)..."
+            for i in {1..30}; do
+              if docker exec app curl -sf http://127.0.0.1:8000/health > /dev/null; then
+                echo "✓ health endpoint отвечает"
+                break
+              fi
+
+              if [ "$i" -eq 30 ]; then
+                echo "✗ Приложение не ответило по /health за отведённое время"
+                echo "Логи контейнера:"
+                docker logs app || true
+                exit 1
+              fi
+
+              sleep 2
+            done
+
+            echo "→ Проверяем, что процесс не под root..."
+            UID_IN=$(docker exec app id -u)
+            if [ "$UID_IN" = "0" ]; then
+              echo "✗ Процесс внутри контейнера запущен от root"
+              exit 1
+            fi
+            echo "✓ non-root uid = $UID_IN"
 
       - name: Stop container
         if: always()
