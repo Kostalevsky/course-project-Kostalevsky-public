@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 import uuid
@@ -7,6 +8,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, 
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 
+from .config import install_secret_filter
 from .database import get_db, init_db
 from .errors import not_found_error, problem, validation_error
 from .middleware import rate_limit_middleware
@@ -15,6 +17,9 @@ from .schemas import CardCreate, CardOut, DeckCreate, DeckOut, ReviewIn
 from .security import secure_save, validate_file_upload
 
 app = FastAPI(title="SecDev Course App", version="0.1.0")
+
+logger = logging.getLogger("app")
+install_secret_filter(logger, "DATABASE_URL", "API_TOKEN", "DB_PASSWORD")
 
 
 @app.on_event("startup")

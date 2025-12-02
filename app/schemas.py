@@ -8,9 +8,10 @@ DeckId = constr(pattern=r"^[a-f0-9-]{4,}$")
 CardId = constr(pattern=r"^[a-f0-9-]{4,}$")
 
 
-class DeckCreate(BaseModel):  # Модель для создания колоды
-    name: constr(min_length=1, max_length=100)  # Обязательное поле - имя колоды карточек
-    description: Optional[constr(max_length=500)] = None  # Необязательное поле - описание колоды
+class DeckCreate(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: constr(min_length=1, max_length=100)
+    description: Optional[constr(max_length=500)] = None
 
 
 class DeckOut(BaseModel):  # Модель для вывода информации о колоде
@@ -20,10 +21,11 @@ class DeckOut(BaseModel):  # Модель для вывода информаци
     cards: int = 0  # Количество карточек в колоде
 
 
-class CardCreate(BaseModel):  # Модель для создания карточки
-    front: constr(min_length=1, max_length=200)  # Вопрос или слово на карточке
-    back: constr(min_length=1, max_length=500)  # Ответ или перевод на карточке
-    hint: Optional[constr(max_length=200)] = None  # Необязательная подсказка для карточки
+class CardCreate(BaseModel):
+    model_config = {"extra": "forbid"}
+    front: constr(min_length=1, max_length=200)
+    back: constr(min_length=1, max_length=500)
+    hint: Optional[constr(max_length=200)] = None
 
 
 class CardOut(BaseModel):  # Модель для вывода информации о карточке
@@ -37,10 +39,11 @@ class CardOut(BaseModel):  # Модель для вывода информаци
     ease: float = 2.5  # Коэффициент легкости карточки
 
 
-class ReviewIn(BaseModel):  # Модель для отправки ответа по карточке
-    card_id: CardId  # Айди карточки
-    grade: constr(pattern="^(again|hard|good)$")  # Оценка ответа: "again", "hard" или "good"
+class ReviewIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    card_id: CardId
+    grade: constr(pattern="^(again|hard|good)$")
 
-    @field_validator("grade")  # Приводим оценку к нижнему регистру
+    @field_validator("grade")
     def _norm(cls, v):
         return v.lower()
