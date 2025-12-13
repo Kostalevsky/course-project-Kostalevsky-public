@@ -90,24 +90,6 @@ jobs:
 
               ls -la EVIDENCE/P11 || true
 
-      - name: Debug ZAP container
-        if: always()
-        run: |
-              docker run --rm -v "${{ github.workspace }}:/zap/wrk" -w /zap/wrk owasp/zap2docker-stable \
-              bash -lc 'pwd; ls -la; zap-baseline.py -h | head -n 30'
-
-      - name: Debug list workspace and evidence
-        if: always()
-        run: |
-              echo "PWD=$(pwd)"
-              echo "=== ls -la (repo root) ==="
-              ls -la
-              echo "=== find zap reports ==="
-              find . -maxdepth 4 -type f \( -name "zap_baseline.*" -o -name "*.html" -o -name "*.json" \) -print || true
-              echo "=== ls -la EVIDENCE ==="
-              ls -la EVIDENCE || true
-              echo "=== ls -la EVIDENCE/P11 ==="
-              ls -la EVIDENCE/P11 || true
 
       - name: Summarize alerts (High/Medium/Low)
         if: always()
