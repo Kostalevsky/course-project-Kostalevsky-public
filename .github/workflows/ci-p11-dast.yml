@@ -63,6 +63,12 @@ jobs:
             sleep 2
           done
 
+      - name: Check target reachable
+        run: |
+            set -euo pipefail
+            curl -v http://127.0.0.1:8000/health
+            curl -v http://127.0.0.1:8000/
+
       - name: ZAP Baseline (scan localhost)
         run: |
             set -euo pipefail
@@ -77,15 +83,11 @@ jobs:
                 -J zap_baseline.json \
                 -d || true
 
-            echo "=== after zap ==="
-            ls -la
-
-            mkdir -p EVIDENCE/P11
-            mv -f zap_baseline.html EVIDENCE/P11/ || true
-            mv -f zap_baseline.json EVIDENCE/P11/ || true
-
-            echo "=== evidence ==="
-            ls -la EVIDENCE/P11 || true
+      - name: Debug ZAP container
+        if: always()
+        run: |
+              docker run --rm -v "${{ github.workspace }}:/zap/wrk" -w /zap/wrk owasp/zap2docker-stable \
+              bash -lc 'pwd; ls -la; zap-baseline.py -h | head -n 30'
 
       - name: Debug list workspace and evidence
         if: always()
