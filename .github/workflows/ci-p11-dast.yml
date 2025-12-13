@@ -66,7 +66,6 @@ jobs:
       - name: ZAP Baseline (scan localhost)
         run: |
             set -euo pipefail
-            mkdir -p EVIDENCE/P11
 
             docker run --rm --network host \
               -v "${{ github.workspace }}:/zap/wrk" \
@@ -74,11 +73,18 @@ jobs:
               owasp/zap2docker-stable \
               zap-baseline.py \
                 -t http://127.0.0.1:8000 \
-                -r EVIDENCE/P11/zap_baseline.html \
-                -J EVIDENCE/P11/zap_baseline.json \
+                -r zap_baseline.html \
+                -J zap_baseline.json \
                 -d || true
 
             echo "=== after zap ==="
+            ls -la
+
+            mkdir -p EVIDENCE/P11
+            mv -f zap_baseline.html EVIDENCE/P11/ || true
+            mv -f zap_baseline.json EVIDENCE/P11/ || true
+
+            echo "=== evidence ==="
             ls -la EVIDENCE/P11 || true
 
       - name: Debug list workspace and evidence
