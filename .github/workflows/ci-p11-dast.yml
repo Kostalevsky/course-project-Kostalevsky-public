@@ -76,12 +76,15 @@ jobs:
             docker run --rm --network host \
               -v "${{ github.workspace }}:/zap/wrk" \
               -w /zap/wrk \
-              owasp/zap2docker-stable \
+              ghcr.io/zaproxy/zaproxy:stable \
               zap-baseline.py \
                 -t http://127.0.0.1:8000 \
                 -r zap_baseline.html \
                 -J zap_baseline.json \
                 -d || true
+
+            mv -f zap_baseline.html EVIDENCE/P11/ || true
+            mv -f zap_baseline.json EVIDENCE/P11/ || true
 
       - name: Debug ZAP container
         if: always()
