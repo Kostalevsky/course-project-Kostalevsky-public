@@ -81,6 +81,19 @@ jobs:
             echo "=== after zap ==="
             ls -la EVIDENCE/P11 || true
 
+      - name: Debug list workspace and evidence
+        if: always()
+        run: |
+              echo "PWD=$(pwd)"
+              echo "=== ls -la (repo root) ==="
+              ls -la
+              echo "=== find zap reports ==="
+              find . -maxdepth 4 -type f \( -name "zap_baseline.*" -o -name "*.html" -o -name "*.json" \) -print || true
+              echo "=== ls -la EVIDENCE ==="
+              ls -la EVIDENCE || true
+              echo "=== ls -la EVIDENCE/P11 ==="
+              ls -la EVIDENCE/P11 || true
+
       - name: Summarize alerts (High/Medium/Low)
         if: always()
         run: |
