@@ -1,0 +1,7 @@
+scan:
+  scanners:
+    - vuln
+  severity:
+    - CRITICAL
+    - HIGH
+format: "json"
