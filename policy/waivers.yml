@@ -1,0 +1,12 @@
+waivers:
+  - id: "CVE-2024-53981"
+    package: "python-multipart"
+    version: "0.0.9"
+    severity: "High"
+    reason: >
+      Транзитивная зависимость FastAPI/Starlette. В проекте отсутствует обработка
+      multipart/form-data и загрузка файлов, поэтому код не используется в прод-пути.
+      Обновление до версии 0.0.18 возможно только через обновление FastAPI/Starlette.
+    issue: "https://github.com/Kostalevsky/course-project-Kostalevsky-public/issues/5#issue-3687057523"
+    expires_at: "2025-12-31"
+    approved_by: "tutor"
