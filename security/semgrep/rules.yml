@@ -1,0 +1,23 @@
+rules:
+  - id: py-debug-print
+    languages: [python]
+    message: "Отладочный print в коде — стоит убрать или заменить логированием."
+    severity: INFO
+    patterns:
+      - pattern: |
+          print($X)
+    metadata:
+      category: style
+      justification: "Помогает не тащить отладочный вывод в прод."
+
+  - id: py-unsafe-htmlresponse
+    languages: [python]
+    message: "Потенциально небезопасный HTMLResponse с подстановкой данных."
+    severity: WARNING
+    patterns:
+      - pattern: |
+          HTMLResponse(f"...{$X}...")
+    metadata:
+      category: security
+      cwe: "CWE-79: Cross-site Scripting"
+      justification: "Проверка потенциального XSS при прямом выводе данных в HTML."
