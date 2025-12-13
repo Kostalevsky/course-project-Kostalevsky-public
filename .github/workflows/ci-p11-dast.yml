@@ -65,17 +65,22 @@ jobs:
 
       - name: ZAP Baseline (scan localhost)
         run: |
-          set -euo pipefail
+            set -euo pipefail
 
-          docker run --rm --network host -v $PWD:/zap/wrk:rw owasp/zap2docker-stable \
-            zap-baseline.py \
-              -t http://127.0.0.1:8000 \
-              -r zap_baseline.html \
-              -J zap_baseline.json \
-              -d || true
+            docker run --rm --network host \
+              -v "$PWD:/zap/wrk" \
+              -w /zap/wrk \
+              owasp/zap2docker-stable \
+              zap-baseline.py \
+                -t http://127.0.0.1:8000 \
+                -r zap_baseline.html \
+                -J zap_baseline.json \
+                -d || true
 
-          mv -f zap_baseline.html EVIDENCE/P11/zap_baseline.html || true
-          mv -f zap_baseline.json EVIDENCE/P11/zap_baseline.json || true
+            ls -la .
+            mkdir -p EVIDENCE/P11
+            mv -f zap_baseline.html EVIDENCE/P11/ || true
+            mv -f zap_baseline.json EVIDENCE/P11/ || true
 
       - name: Summarize alerts (High/Medium/Low)
         if: always()
