@@ -66,21 +66,20 @@ jobs:
       - name: ZAP Baseline (scan localhost)
         run: |
             set -euo pipefail
+            mkdir -p EVIDENCE/P11
 
             docker run --rm --network host \
-              -v "$PWD:/zap/wrk" \
+              -v "${{ github.workspace }}:/zap/wrk" \
               -w /zap/wrk \
               owasp/zap2docker-stable \
               zap-baseline.py \
                 -t http://127.0.0.1:8000 \
-                -r zap_baseline.html \
-                -J zap_baseline.json \
+                -r EVIDENCE/P11/zap_baseline.html \
+                -J EVIDENCE/P11/zap_baseline.json \
                 -d || true
 
-            ls -la .
-            mkdir -p EVIDENCE/P11
-            mv -f zap_baseline.html EVIDENCE/P11/ || true
-            mv -f zap_baseline.json EVIDENCE/P11/ || true
+            echo "=== after zap ==="
+            ls -la EVIDENCE/P11 || true
 
       - name: Summarize alerts (High/Medium/Low)
         if: always()
