@@ -45,7 +45,8 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
-          config: hadolint.yml
+          config: security/hadolint.yml
+          failure-threshold: error
 
       - name: Build image
         uses: docker/build-push-action@v6
