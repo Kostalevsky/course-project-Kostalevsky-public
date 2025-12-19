@@ -1,0 +1,6 @@
+quiet: false
+compact: true
+
+framework:
+  - dockerfile
+  - docker_compose
